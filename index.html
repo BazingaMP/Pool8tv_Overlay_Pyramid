@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pool8.tv Stream Overlay</title>
+    <style>
+    /* Reset */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: visible; background: transparent; }
+
+    :root {
+      --bg-light: #66666e;
+      --bg-dark: #121212;
+      --accent: #00d26a;
+      --text-light: #f5f5f7;
+      --font: 'Segoe UI', sans-serif;
+    }
+    body { font-family: var(--font); color: var(--text-light); }
+    #overlay { position: relative; width: 100%; height: 100%; }
+
+    /* Top Bar */
+    .top-bar {
+      position: absolute;
+      top: 20px; left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 8px 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+    .top-bar .logo img { height: 32px; }
+    .top-bar .tourney-info { display: flex; flex-direction: column; }
+    .top-bar .tourney-info .title { font-size: 16px; font-weight: 600; color: #222; }
+    .top-bar .tourney-info .meta  { font-size: 12px; color: #555; margin-top: 2px; }
+
+    /* Race pill above card */
+    .race-pill {
+      position: absolute;
+      bottom: calc(20px + 71px + 4px); /* adjust as needed to float above match-card */
+      left: 50%;
+      transform: translateX(-50%);
+      background: #f5c910;
+      color: #222;
+      padding: 6px 16px;
+      border-radius: 12px 12px 0 0;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      z-index: 9;
+      backdrop-filter: blur(4px);
+      white-space: nowrap;
+    }
+
+    /* Bottom Card */
+    .match-card {
+      position: absolute;
+      bottom: 15px;
+      left: 50%; transform: translateX(-50%);
+      width: 90%; max-width: 1200px;
+      background: var(--bg-dark);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 0;
+      gap: 16px;
+      overflow: visible;
+      z-index: 5;
+    }
+    .match-card::before {
+      content: '';
+      position: absolute;
+      top: -4px; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      border-radius: 4px 4px 0 0;
+    }
+
+    .player-zone {
+      display: flex; align-items: center; gap: 12px;
+      position: relative; z-index: 2;
+    }
+    .player-zone#player2 { justify-content: flex-end; }
+
+    /* Floating avatar with circular clip */
+    .player-avatar {
+      position: relative;
+      width: 80px; height: 80px;
+      border: 4px solid var(--bg-dark);
+      border-radius: 50%;
+      transform: translateY(-32px);
+      background: var(--bg-light);
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .player-avatar .avatar-circle {
+      width: 100%; height: 100%;
+      border-radius: 50%; overflow: hidden;
+    }
+    .player-avatar .avatar-circle img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block;
+    }
+    .player-avatar .flag {
+      position: absolute;
+      bottom: -4px; right: -4px;
+      width: 32px; height: 20px;
+      border: 0px solid var(--bg-dark);
+      border-radius: 2px;
+      background: #fff;
+      z-index: 5;
+    }
+
+    .player-details {
+      display: flex; flex-direction: column;
+      color: var(--text-light);
+    }
+    .player-details .name {
+      font-size: 24px; font-weight: 600;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+      white-space: nowrap;
+    }
+
+    /* Elo badge styling */
+    .elo-chip {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: .9rem;
+      font-weight: 600;
+      margin-top: 6px;
+      color: #000;
+      text-align: center;
+      line-height: 1.1;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .badge-classd { background: #adb5bd; }
+    .badge-classc { background: #6c757d; }
+    .badge-classb { background: #198754; }
+    .badge-classa { background: #0d6efd; }
+    .badge-cm    { background: #ffc107; }
+    .badge-master{ background: #fd7e14; }
+    .badge-gm    { background: #dc3545; }
+
+    .score-zone {
+      display: flex; flex-direction: column; align-items: center;
+      color: var(--text-light);
+      gap: 4px;
+    }
+    .score-zone .score {
+      font-size: 48px; font-weight: 700;
+      display: flex; align-items: center;
+      gap: 12px;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+    }
+    .score-box {
+      background: rgba(255,255,255,0.08);
+      padding: 8px 14px;
+      border-radius: 8px;
+      min-width: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .score-zone .vs-logo {
+      width: 40px; height: auto;
+      margin: 0 12px;
+    }
+
+    /* Score change pop animation */
+    @keyframes pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.4); }
+      100% { transform: scale(1); }
+    }
+    .score-zone .score span { display: inline-block; }
+    .score-zone .score span.pop { animation: pop 0.4s ease-out; }
+  </style>
+</head>
+<body>
+<div id="overlay">
+    <div class="top-bar">
+        <div class="logo"><img src="https://static.wixstatic.com/media/c42877_9364a5e07c6e41989bf292cbed7b4359~mv2.png" alt="Logo"></div>
+        <div class="tourney-info">
+            <div class="title" id="tourney-name">—</div>
+            <div class="meta" id="tourney-dates">—</div>
+            <div class="meta" id="round-info">—</div>
+        </div>
+    </div>
+
+    <div class="race-pill" id="race-to">—</div>
+
+    <div class="match-card">
+        <div class="player-zone" id="player1">
+            <div class="player-avatar">
+                <div class="avatar-circle"><img id="img1" src="" alt="Player 1"></div>
+                <img class="flag" id="flag1" src="" alt="Flag 1">
+            </div>
+            <div class="player-details">
+                <div class="name" id="name1">—</div>
+                <div class="elo-chip badge-classd" id="elo1">—</div>
+            </div>
+        </div>
+
+        <div class="score-zone">
+            <div class="score">
+                <div class="score-box"><span id="score1">0</span></div>
+                <img src="https://static.wixstatic.com/media/c42877_03317b81414a4403a356ba65cc8b79b9~mv2.png" alt="VS" class="vs-logo" />
+                <div class="score-box"><span id="score2">0</span></div>
+            </div>
+        </div>
+
+        <div class="player-zone" id="player2">
+            <div class="player-details">
+                <div class="name" id="name2">—</div>
+                <div class="elo-chip badge-classd" id="elo2">—</div>
+            </div>
+            <div class="player-avatar">
+                <div class="avatar-circle"><img id="img2" src="" alt="Player 2"></div>
+                <img class="flag" id="flag2" src="" alt="Flag 2">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const RANKING_ID = 53950450;
+    const TABLE_NUMBER = 10;
+    const REFRESH_INTERVAL = 10000;
+    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQDtoLuDb_2oUK-RY2FavLxBReyT8w1WXGbZuRk20GOjh2vSkPDMAzNjytQNcY_xnbUkhgEjN2dvgiT/pub?output=csv';
+    const BASE_RATING = 500, K_FACTOR = 15;
+
+    let prevScore1 = null, prevScore2 = null;
+
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Network error ' + res.status);
+      return res.json();
+    }
+
+    function parseCSV(csv) {
+      const lines = csv.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const cols = line.split(',');
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = cols[i]?.trim() || '');
+        return obj;
+      });
+    }
+
+    function computeElo(games) {
+      const ratings = {}, seen = new Set();
+      games.slice()
+        .sort((a, b) => new Date(a['Tournament Date']) - new Date(b['Tournament Date']))
+        .forEach(g => {
+          const key = (g['Tournament ID'] || '') + '|' + (g['Match ID'] || '');
+          if (seen.has(key)) return;
+          seen.add(key);
+          const p = g['Player Name'], o = g['Opponent Name'];
+          const fw = +g['Frames won'], fl = +g['Frames Lost'];
+          if (!p || !o || isNaN(fw) || isNaN(fl)) return;
+          if (!(p in ratings)) ratings[p] = BASE_RATING;
+          if (!(o in ratings)) ratings[o] = BASE_RATING;
+          const Ra = ratings[p], Rb = ratings[o];
+          const expA = 1 / (1 + Math.pow(10, (Rb - Ra) / 400));
+          const actA = fw > fl ? 1 : fw < fl ? 0 : 0.5;
+          const margin = 1 + Math.abs(fw - fl) * 0.1;
+          const delta = K_FACTOR * margin * (actA - expA);
+          ratings[p] = Ra + delta;
+          ratings[o] = Rb - delta;
+        });
+      return ratings;
+    }
+
+    function getBadge(r) {
+      if (r >= 801) return { label: 'Grand Master', cls: 'badge-gm' };
+      if (r >= 701) return { label: 'Master', cls: 'badge-master' };
+      if (r >= 601) return { label: 'Candidate Master', cls: 'badge-cm' };
+      if (r >= 501) return { label: 'Class A', cls: 'badge-classa' };
+      if (r >= 401) return { label: 'Class B', cls: 'badge-classb' };
+      if (r >= 301) return { label: 'Class C', cls: 'badge-classc' };
+      if (r >= 201) return { label: 'Class D', cls: 'badge-classd' };
+      return { label: 'Unrated', cls: 'badge-classd' };
+    }
+
+    async function getCurrentTournamentId() {
+      const rank = await fetchJSON(`https://api.cuescore.com/ranking/?id=${RANKING_ID}`);
+      const active = rank.tournaments.find(t => t.status?.toLowerCase() === 'active');
+      return active?.id;
+    }
+
+    function animateScore(el, newVal, prevVal) {
+      if (prevVal !== null && prevVal != newVal) {
+        el.classList.add('pop');
+      }
+      el.textContent = newVal;
+      const handler = () => {
+        el.classList.remove('pop');
+        el.removeEventListener('animationend', handler);
+      };
+      el.addEventListener('animationend', handler);
+    }
+
+    async function updateOverlay() {
+      try {
+        const id = await getCurrentTournamentId();
+        if (!id) throw 'No active tournament';
+
+        const csv = await fetch(SHEET_URL).then(r => r.text());
+        const games = parseCSV(csv);
+        const ratings = computeElo(games);
+
+        const tour = await fetchJSON(`https://api.cuescore.com/tournament/?id=${id}`);
+        document.getElementById('tourney-name').textContent = tour.name;
+        document.getElementById('tourney-dates').textContent = tour.displayDate;
+        document.getElementById('round-info').textContent = `Round ${tour.round || tour.currentRound || ''} – Table ${TABLE_NUMBER}`;
+
+        const match = (tour.matches || []).find(m => String(m.table?.name) === String(TABLE_NUMBER) && m.matchstatus === 'playing');
+        if (!match) return;
+
+        // race pill
+        document.getElementById('race-to').textContent = `Race to ${match.raceTo}`;
+
+        // scores with animation
+        const s1El = document.getElementById('score1');
+        const s2El = document.getElementById('score2');
+        animateScore(s1El, match.scoreA, prevScore1);
+        animateScore(s2El, match.scoreB, prevScore2);
+        prevScore1 = match.scoreA;
+        prevScore2 = match.scoreB;
+
+        // Player A
+        const pA = match.playerA;
+        document.getElementById('name1').textContent = pA.name;
+        document.getElementById('flag1').src = pA.country?.image || '';
+        document.getElementById('img1').src = pA.image || pA.avatar || '';
+        const ra = Math.round(ratings[pA.name] || BASE_RATING);
+        const ba = getBadge(ra);
+        const e1 = document.getElementById('elo1');
+        e1.textContent = `${ra} ${ba.label}`;
+        e1.className = `elo-chip ${ba.cls}`;
+
+        // Player B
+        const pB = match.playerB;
+        document.getElementById('name2').textContent = pB.name;
+        document.getElementById('flag2').src = pB.country?.image || '';
+        document.getElementById('img2').src = pB.image || pB.avatar || '';
+        const rb = Math.round(ratings[pB.name] || BASE_RATING);
+        const bb = getBadge(rb);
+        const e2 = document.getElementById('elo2');
+        e2.textContent = `${rb} ${bb.label}`;
+        e2.className = `elo-chip ${bb.cls}`;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    updateOverlay();
+    setInterval(updateOverlay, REFRESH_INTERVAL);
+  </script>
+</body>
+</html>
